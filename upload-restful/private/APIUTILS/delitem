@@ -1,0 +1,20 @@
+#!/usr/bin/perl
+use Cwd;
+
+die "Usage: delitem listname itemid\n" unless @ARGV==2;
+
+my( $n, $i ) = @ARGV;
+$n =~ s/ /%20/g;
+
+# map from pwd of form /homes/USER/public_html/DIRPATH to
+# www.doc.ic.ac.uk/~USER/DIRPATH/api
+my $pwd = getcwd;
+$pwd =~ m|^/homes/(\w+)/public_html/(.*)$|;
+my $url="http://www.doc.ic.ac.uk/~$1/$2/api";
+#die $url;
+
+my $cmd = qq(curl -X DELETE -i -H 'Content-Type: application/json' $url/$n/$i);
+
+#die $cmd;
+
+system( $cmd );

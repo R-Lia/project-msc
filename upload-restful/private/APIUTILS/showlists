@@ -1,0 +1,17 @@
+#!/usr/bin/perl
+use Cwd;
+
+die "Usage: showall\n" unless @ARGV==0;
+
+# map from pwd of form /homes/USER/public_html/DIRPATH to
+# www.doc.ic.ac.uk/~USER/DIRPATH/api
+my $pwd = getcwd;
+$pwd =~ m|^/homes/(\w+)/public_html/(.*)$|;
+my $url="http://www.doc.ic.ac.uk/~$1/$2/api";
+#die $url;
+
+my $cmd = qq(curl -X GET -i -H 'Content-Type: application/json' $url);
+
+#die $cmd;
+
+system( $cmd );

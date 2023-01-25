@@ -1,0 +1,44 @@
+#!/usr/bin/perl
+#
+#	showall:	show the current contents of the database: shopping lists and their items
+#
+
+use strict;
+use warnings;
+
+use ListDB;
+
+
+my $dbh = connect_db();
+
+die "can't connect to db\n" unless defined $dbh;
+
+my @records = getrecords( $dbh, list_table(), "name" );
+
+my @items = getrecords( $dbh, item_table(), "id" );
+
+my %items;	# hash: listname -> ref to list of items on that list
+map {
+	my $listname = $_->{listname};
+	my $listref = ($items{$listname} ||= []);
+	push @$listref, { %{$_} };
+} @items;
+
+foreach my $record (@records)
+{
+	my $name = $record->{name};
+	my $owner = $record->{owner};
+	print "\nname: $name, owner: $owner\n";
+	my $items = $items{$name};
+	foreach my $item (@$items)
+	{
+		my $id = $item->{id};
+		my $name = $item->{name};
+		my $description = $item->{description};
+		my $quantity = $item->{quantity};
+		my $price = sprintf( "%.2f", $item->{price} );
+		print "\tid $id, name $name, description $description, quantity $quantity, price £$price\n";
+	}
+}
+
+disconnect_db( $dbh );

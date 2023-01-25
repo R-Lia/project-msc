@@ -1,0 +1,183 @@
+#!/usr/bin/perl
+#
+#	api: a CGI script to present a one-route-POST-based RESTful api
+#	     to download a JSON file and store it.
+#	     Do it without using a framework.  Django, MVC, ORMs,
+#	     serializers etc can all get stuffed.  Let's do it ourselves:-)
+#
+#	     Based on an earlier shopping-restful-api prototype.
+#
+
+use strict;
+use warnings;
+use CGI;
+use JSON;
+use File::Path qw(make_path);
+
+use lib qw(.);
+use Helpers;
+
+my $cgi;		# CGI object to access HTTP request data
+
+#my $storedir = "/homes/aab621/eWater-uploads";
+my $storedir = "/vol/bitbucket/aab621/eWater-uploads";
+
+# Create a directory if it does not exist (kind of like mkdir), mode defines the permission
+# Unless statement is equivalent to if not
+# statement unless(condition);
+# Perl executes the statement from right to left, if the condition is false, Perl
+# executes the statement that precedes the unless. If the condition is true, Perl
+# skips the statement.
+# -d test if the directory exists. It is a file test
+# So if the directory exists do nothing else create it 
+make_path( $storedir, {
+    mode => 0755,
+}) unless -d $storedir;
+
+
+#
+# my $hashref = decode_json_postdata( $postdata );
+#	Given post data $postdata, which is expected to be JSON, and
+#	to represent a single hash, decode it into a Perl hashref,
+#	Produces a bad request if $postdata is not good JSON or not a hash.
+#
+sub decode_json_postdata
+{
+	# Within a subroutine the array @_ contains the parameters passed to that subroutine. 
+	my( $postdata ) = @_; 
+
+	# Decode the JSON data into string into perl hashref but if it does not work use method from HElper
+	my $data = decode_json( $postdata ) ||
+		h_bad_request( $cgi, "bad JSON in post data $postdata" );
+
+	# The ref() function will return the type of the reference it got as a parameter (build in types like ARRAY, SCALAR, HASH ...
+	my $s = ref($data);
+	h_bad_request( $cgi, "bad post data $postdata, hash needed, $s found" )
+		unless $s eq "HASH";
+	# Return the decoded JSON in perl HASHREF
+	return $data;
+}
+
+
+#
+# my %info = validate_data( $data, @fieldnames );
+#	Given decoded json data $data, a hashref, check that it
+#	contains all the required fieldnames @fieldnames,
+#	then extract them all and build and return a hash
+#	in which the keys are those fieldsnames and the values
+#	are the corresponding data values.
+#	
+#	Produces a bad request if anything of the required fields are missing.
+#
+sub validate_data
+{
+	my( $data, @fieldnames ) = @_;
+	
+	# grep { EXPR} LIST : returns the number of times the EXPR returned true in scalar context(each element of the LIST) and list of elements that matched the expression in LIST.
+	# defined VAR : check if VAR is defined (have a value)
+	# $data -> {$_} : reference a particular header of the data variable
+	# Overall, missing is a list of elements that are in fieldnames but not in data (so missing keys)
+	my @missing = grep { ! defined $data->{$_} } @fieldnames;
+	if( @missing )
+	{
+		# If missing == 1 then sp = "" otherwise sp = "s". 
+		# Check if there are more than 1 missing fields to add an s at the error message
+		my $sp = @missing == 1 ? "" : "s";
+		my $missstr = join( ',', @missing );
+		h_bad_request( $cgi,
+			"bad post data ". encode_json($data).
+			": required field$sp $missstr missing" );
+	}
+	my %result = map { $_ => $data->{$_} } @fieldnames;
+	return %result;
+}
+
+
+### ACTIONS:
+
+
+#
+# store_data( $data );
+#	Add a list, %islist is the set of all existing lists.
+#	$data is a hashref containing the decoded data from the client.
+#
+sub store_data
+{
+	my( $data ) = @_;
+
+	#my %newrecord = validate_data( $data, "name", "owner" );
+	#my %newrecord = validate_data( $data, "Transaction" );
+	#my $name = $newrecord{name};
+
+	# need to store it somewhere.. for now in $storedir/currenttime
+	unless( opendir( my $dirfh, $storedir ) )
+	{
+		h_bad_request( $cgi, "error: can't read $storedir" );
+		return;
+	}
+
+	# find last $storedir/N file that does exist
+	#my $freen;
+	#for( $freen=1; -f "$storedir/$freen"; $freen++ )
+	#{
+	#}
+	my $freen = time(); 
+
+
+	my $outfh;
+	unless( open( $outfh, '>', "$storedir/$freen" ) )
+	{
+		h_bad_request( $cgi,
+			"error: can't save data to $storedir/$freen" );
+		return;
+	}
+	$data = encode_json($data)."\n";
+	print $outfh $data;
+	close( $outfh );
+
+	h_created( $cgi, "saved as storedir/$freen" );
+}
+
+
+### Main program, including the ROUTING...
+
+$cgi = CGI->new;
+
+# Returns the method used to access your script, usually one of 'POST', 'GET' or 'HEAD'.
+my $method = $cgi->request_method;
+
+# Returns additional path information from the script URL. E.G. fetching /cgi-bin/your_script/additional/stuff will result in path_info() returning "/additional/stuff".
+my $pathinfo = $cgi->path_info();
+
+my $remote_client = $cgi->remote_addr;
+
+#debug	h_ok( { "method" => $method, "pathinfo" => $pathinfo } );
+
+h_bad_request( $cgi, "No request method!" ) unless defined $method;
+
+# lc returns a lowercase version
+if( lc($pathinfo) eq "/give_me_coffee" )
+{
+	h_teapot( $cgi, "I'm not a coffee machine!" );
+}
+
+# If the method is post
+if( $method eq "POST" )
+{
+=for comment
+	if ( $remote_client ne "5.81.51.139")
+	{
+		h_bad_request( $cgi, "PAS BONNE ADRESSE IP" );
+	}
+=cut
+
+
+	# If POSTed data is not of type application/x-www-form-urlencoded or multipart/form-data, then the POSTed data will not be processed, but instead be returned as-is in a parameter named POSTDATA. To retrieve it, use code like this:
+	my $postdata = $cgi->param("POSTDATA");
+	my $data = decode_json_postdata( $postdata );
+	if( $pathinfo eq "" )	# POST / -> store data
+	{
+		store_data( $data );
+	}
+}
+h_bad_request( $cgi, "Can't route method $method, pathinfo $pathinfo" );
